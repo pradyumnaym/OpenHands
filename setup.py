@@ -33,7 +33,7 @@ setuptools.setup(
         'Issues': "https://github.com/AI4Bharat/OpenHands/issues",
         'Documentation': "https://openhands.readthedocs.io",
     },
-    author="AI4Bhārat",
+    author="AI4Bhārat",     
     # packages=["openhands"],
     packages=setuptools.find_packages(),
     # packages=setuptools.find_packages(exclude=("tests",)),

@@ -51,7 +51,9 @@ class BaseContinuousDataset(torch.utils.data.Dataset):
         num_seq=1, # No. of windows
     ):
         super().__init__()
-
+        f = open('multigpu.log', 'a')
+        f.write(f"{torch.cuda.current_device()}: inside __init__ of BaseContinuousDataset\n")
+        f.close()
         self.split_file = split_file
         self.root_dir = root_dir
         self.class_mappings_file_path = class_mappings_file_path

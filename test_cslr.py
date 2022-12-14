@@ -14,16 +14,9 @@ if __name__ == '__main__':
   config = omegaconf.OmegaConf.load("examples/configs/phoenix14/tlp.yaml")
 
   datamodule = DataModule(config.data)
-  datamodule.setup(stage='fit')
-  #val_dataloader = datamodule.val_dataloader()
-
+  
   model = get_cslr_model(config.model)
 
   trainer = pl.Trainer(**config.trainer)
-  #trainer.fit(model, datamodule=datamodule)
-  trainer.fit(model, train_dataloaders=datamodule.train_dataloader(), val_dataloaders=datamodule.val_dataloader())
-
-## GPU utilization not high throughout. Probable cause: waiting for dataloaders
-## Issue with multiple workers on dataloaders: AttributeError
-## Try below:
-## https://pytorch-lightning.readthedocs.io/en/stable/accelerators/gpu_intermediate.html
+  trainer.fit(model, datamodule=datamodule)
+  

@@ -49,3 +49,4 @@ class Phoenix14TDataset(BaseContinuousDataset):
     video_dir, gloss_seq, text_seq = self.data[index]
     imgs = load_frames_from_folder(os.path.join(self.root_dir, video_dir), pattern='*.png')
     return imgs, gloss_seq, text_seq, video_dir
+

@@ -5,3 +5,8 @@ default/
 dist/
 *.egg-info/
 *.zip
+
+code_test.py
+code_test.ipynb
+train.py
+test.py

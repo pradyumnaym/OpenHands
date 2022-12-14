@@ -172,9 +172,10 @@ class TemporalConv(EncoderModule):
         visual_feat = tempconv(visual_feat)
     lgt = self.update_lgt(lgt)
     
+    ## LiftPool losses
     self.internal_losses.update({
-      "loss_LiftPool_u": loss_LiftPool_u,
-      "loss_LiftPool_p": loss_LiftPool_p,
+      "Cu": loss_LiftPool_u,
+      "Cp": loss_LiftPool_p,
     })
     
     return visual_feat.transpose(1,2), lgt, self.internal_losses
@@ -215,7 +216,7 @@ class BiLSTMLayer(EncoderModule):
       - hidden : (num_layers, batch_size, hidden_size * num_directions)
     """
     # (max_src_len, batch_size, D)
-    packed_emb = nn.utils.rnn.pack_padded_sequence(src_feats.transpose(0,1), src_lens)
+    packed_emb = nn.utils.rnn.pack_padded_sequence(src_feats.transpose(0,1), src_lens.cpu())
 
     # rnn(gru) returns:
     # - packed_outputs: shape same as packed_emb

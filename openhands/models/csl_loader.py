@@ -90,5 +90,5 @@ def get_cslr_model(config):
       break
   
   from .csl_network import CSLRModel
-  return CSLRModel(encoder_seq, config.losses, config.num_classes_gloss)
+  return CSLRModel(encoder_seq, config, config.num_classes_gloss)
   

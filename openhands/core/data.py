@@ -54,7 +54,7 @@ class DataModule(pl.LightningDataModule):
             collate_fn=self.valid_dataset.collate_fn,
         )
         return dataloader
-    
+
     def test_dataloader(self):
         dataloader = hydra.utils.instantiate(
             self.data_cfg.test_pipeline.dataloader,
@@ -117,7 +117,7 @@ class DataModule(pl.LightningDataModule):
         if not albu_config:
             return transforms
         albu_config = OmegaConf.to_container(albu_config, resolve=True)
-        
+
         for transform in albu_config:
             for transform_name, transform_args in transform.items():
                 transform = A.from_dict(

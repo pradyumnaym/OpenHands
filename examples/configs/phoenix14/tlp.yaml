@@ -1,0 +1,95 @@
+model:
+  num_classes_gloss: 1235 # TLP uses 1296 classes. Using torchtext tokenizer, we get 1235. Need to automate.
+
+  encoder_seq:
+    encoder1:
+      type: ResNet18
+      params:
+
+    encoder2:
+      type: TempConv_TLP
+      params:
+        input_size: 512 # output length of ResNet18 = 512
+        hidden_size: 1024 # can change this arbitrarily?
+        num_classes: 1296 # required for ConvCTC. Could remove later
+        use_ctc: True
+
+    encoder3:
+      type: BiLSTMLayer
+      params:
+        input_size: 1024 # output length of TempConv
+        hidden_size: 1024
+        use_ctc: True
+  
+  losses:
+    loss1:
+      type: 'Distillation'
+      name: 'Distillation'
+      params:
+        T: 8
+      inputs:
+        prediction_logits: 'encoder2.logits'
+        ref_logits: 'encoder3.logits'
+    
+  loss_weights:
+    encoder2.CTCLoss: 1.0
+    encoder3.CTCLoss: 1.0
+    Distillation: 25.0
+    Cu: 0.001
+    Cp: 0.001
+
+  optimizer_args:
+    optimizer: Adam
+    base_lr: 0.0001
+    step: [ 40, 60]
+    learning_ratio: 1
+    weight_decay: 0.0001
+    start_epoch: 0
+    nesterov: False
+
+data:
+  modality: "video"
+  train_pipeline:
+    dataset:
+      _target_: openhands.datasets.continuous.Phoenix14Dataset
+      split_file: "/data/OpenHands/openhands/datasets/assets/phoenix14_metadata/train.corpus.csv"
+      root_dir: "/data/cslr_datasets/PHOENIX-2014/phoenix2014-release/phoenix-2014-multisigner/"
+      modality: "rgb"
+      splits: "train"
+      train_file: "/data/OpenHands/openhands/datasets/assets/phoenix14_metadata/train.corpus.csv"
+
+    transforms:
+
+    dataloader:
+      _target_: torch.utils.data.DataLoader
+      batch_size: 4
+      shuffle: true
+      num_workers: 3 # default = 3
+      pin_memory: true
+      drop_last: false
+
+  valid_pipeline:
+    dataset:
+      _target_: openhands.datasets.continuous.Phoenix14Dataset
+      split_file: "/data/OpenHands/openhands/datasets/assets/phoenix14_metadata/dev.corpus.csv"
+      #class_mappings_file_path: "/data/OpenHands/openhands/datasets/assets/phoenix14_metadata/train.corpus.csv"
+      root_dir: "/data/cslr_datasets/PHOENIX-2014/phoenix2014-release/phoenix-2014-multisigner/"
+      modality: "rgb"
+      splits: "val"
+      train_file: "/data/OpenHands/openhands/datasets/assets/phoenix14_metadata/train.corpus.csv"
+
+    transforms:
+
+    dataloader:
+      _target_: torch.utils.data.DataLoader
+      batch_size: 4
+      shuffle: false
+      num_workers: 0 # default 1
+      pin_memory: true
+      drop_last: false
+
+trainer:
+  accelerator: 'gpu'
+  devices: [0,1,2,3]
+  max_epochs: 80
+

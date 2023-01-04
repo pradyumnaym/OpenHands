@@ -1,0 +1,110 @@
+model:
+  recognition_beam_size: 1
+  translation_beam_size: 1
+  translation_max_output_length: 30
+  eval_translation_beam_alpha: -1
+  
+  data_info:
+    num_classes_gloss: 1089 # TLP uses 1296 classes. Using torchtext tokenizer, we get 1235. Need to automate.
+    num_classes_text: 2891
+    pad_index_gloss: 0
+    pad_index_text: 0
+
+  encoder_seq:
+    encoder1:
+      type: ResNet
+      params:
+
+    encoder2:
+      type: TransformerEncoder
+      params:
+        num_layers: 3
+        num_heads: 8
+        hidden_size: 512
+        ff_size: 2048
+        dropout: 0.1
+        embeddings:
+          embedding_dim: 512
+          scale: false
+          dropout: 0.1
+          norm_type: batch
+          activation_type: softsign
+          num_heads: 8
+          input_size: 512
+
+  decoder:
+    type: TransformerDecoder
+    params:
+      num_layers: 3
+      num_heads: 8
+      hidden_size: 512
+      ff_size: 2048
+      dropout: 0.1
+      embeddings:
+        embedding_dim: 512
+        scale: false
+        dropout: 0.1
+        norm_type: batch
+        activation_type: softsign
+  
+  losses:
+    
+  loss_weights:
+    CTC: 5.0
+    Xent: 1.0
+
+  optimizer_args:
+    optimizer: Adam
+    base_lr: 0.0001
+    step: [ 40, 60]
+    learning_ratio: 1
+    weight_decay: 0.0001
+    start_epoch: 0
+    nesterov: False
+
+data:
+  modality: "video"
+  train_pipeline:
+    dataset:
+      _target_: openhands.datasets.continuous.Phoenix14TDataset
+      split_file: "/data/OpenHands/openhands/datasets/assets/phoenix14-t_metadata/PHOENIX-2014-T.train.corpus.csv"
+      root_dir: "/data/cslr_datasets/PHOENIX-2014/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/"
+      modality: "rgb"
+      splits: "train"
+      train_file: "/data/OpenHands/openhands/datasets/assets/phoenix14-t_metadata/PHOENIX-2014-T.train.corpus.csv"
+
+    transforms:
+
+    dataloader:
+      _target_: torch.utils.data.DataLoader
+      batch_size: 2
+      shuffle: true
+      num_workers: 8 # default = 3
+      pin_memory: true
+      drop_last: false
+
+  valid_pipeline:
+    dataset:
+      _target_: openhands.datasets.continuous.Phoenix14TDataset
+      split_file: "/data/OpenHands/openhands/datasets/assets/phoenix14-t_metadata/PHOENIX-2014-T.dev.corpus.csv"
+      root_dir: "/data/cslr_datasets/PHOENIX-2014/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/"
+      modality: "rgb"
+      splits: "val"
+      train_file: "/data/OpenHands/openhands/datasets/assets/phoenix14-t_metadata/PHOENIX-2014-T.train.corpus.csv"
+
+    transforms:
+
+    dataloader:
+      _target_: torch.utils.data.DataLoader
+      batch_size: 4
+      shuffle: false
+      num_workers: 8 # default 1
+      pin_memory: true
+      drop_last: false
+
+trainer:
+  accelerator: 'gpu'
+  devices: [0, 3, 1, 2]
+  max_epochs: 80
+  strategy: 'ddp_find_unused_parameters_false'
+

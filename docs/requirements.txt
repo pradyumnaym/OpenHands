@@ -11,6 +11,7 @@ mediapipe>=0.8.7.3
 natsort
 h5py
 torchvision
+torchtext
 opencv_python_headless
 torchmetrics>=0.5.1
 timm
@@ -20,6 +21,8 @@ Pillow>=8.3.2
 scikit_learn>=1.0
 beautifulsoup4
 lxml
+spacy
+
 
 sphinx
 myst-parser

@@ -31,11 +31,16 @@ class DataModule(pl.LightningDataModule):
             self.in_channels = self.valid_dataset.in_channels
             assert self.train_dataset.num_class == self.valid_dataset.num_class
             self.num_class = self.valid_dataset.num_class
+            self.gloss_vocab = self.train_dataset.gloss_vocab
+            self.text_vocab = self.train_dataset.text_vocab
+
         elif stage == "test":
             self.test_dataset = self._instantiate_dataset(self.data_cfg.test_pipeline)
 
             self.in_channels = self.test_dataset.in_channels
             self.num_class = self.test_dataset.num_class
+            self.gloss_vocab = self.test_dataset.gloss_vocab
+            self.text_vocab = self.test_dataset.text_vocab
         else:
             raise ValueError("Unknown `stage` value when calling `data_module.setup()`")
 

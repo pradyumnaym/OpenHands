@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.models import resnet18
+from .base_encoder import EncoderModule
 
 '''
 2 types of encoders:
@@ -19,13 +20,6 @@ So every encoder should return:
 ## instead of this specific TLP file. Or maybe just import from torch.utils directly
 
 ## to implement parts common to all Encoder Modules
-class EncoderModule(nn.Module):
-  def __init__(self, encoder_id="__", use_ctc=False, **kwargs):
-    super(EncoderModule, self).__init__()
-    self.use_ctc = use_ctc
-    self.encoder_id = encoder_id
-    self.internal_losses = {}
-
 
 class TLPResnet18(EncoderModule):
   def __init__(self,**kwargs):

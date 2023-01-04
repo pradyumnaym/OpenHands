@@ -3,7 +3,7 @@ model:
 
   encoder_seq:
     encoder1:
-      type: ResNet18
+      type: TLPResNet18
       params:
 
     encoder2:
@@ -57,6 +57,7 @@ data:
       modality: "rgb"
       splits: "train"
       train_file: "/data/OpenHands/openhands/datasets/assets/phoenix14_metadata/train.corpus.csv"
+      pad_type: "temp_conv"
 
     transforms:
 
@@ -77,6 +78,7 @@ data:
       modality: "rgb"
       splits: "val"
       train_file: "/data/OpenHands/openhands/datasets/assets/phoenix14_metadata/train.corpus.csv"
+      pad_type: "temp_conv"
 
     transforms:
 

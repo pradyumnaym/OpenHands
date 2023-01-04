@@ -5,8 +5,12 @@ default/
 dist/
 *.egg-info/
 *.zip
+lightning_logs/
+slt/
+wandb/
 
 code_test.py
 code_test.ipynb
 train.py
 test.py
+multigpu.log

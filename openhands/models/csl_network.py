@@ -1,6 +1,16 @@
 import torch
 import torch.nn as nn
+import numpy as np
+import tensorflow as tf
 import pytorch_lightning as pl
+
+from openhands.datasets.continuous.vocabulary import PAD_TOKEN, BOS_TOKEN, EOS_TOKEN
+from .continuous.loss.slt import XentLoss
+from .continuous.decoder.decoder_utils import ctc_decode, decode
+from .continuous.metrics.metrics import get_wer, get_bleu
+from ..core.data import DataModule
+from .csl_loader import get_slt_model
+
 
 class CSLRModel(pl.LightningModule):
   def __init__(self, encoder_seq, config, num_classes_gloss):
@@ -95,8 +105,136 @@ class CSLRModel(pl.LightningModule):
 #     if custom_classes:
 
 
-# class SLTModel(pl.LightningModule):
-#   def __init__(self, s2g_config, g2t_config, model_type='s2g2t'):
-#     super().__init__()
-#     self.s2g_model = CSLRModel(s2g_config)
-#     self.g2t_model = G2TModel(g2t_config['encoder'], g2t_config['decoder'], custom_classes=g2t_config['custom_class'])
+class SLTModel(pl.LightningModule):
+  def __init__(self, config, trainer):
+    super().__init__()
+
+    self.config = config
+    self.trainer = trainer
+    self.datamodule = DataModule(config.data)
+    self.datamodule.setup(stage='fit')
+    self.train_dataloader = self.datamodule.train_dataloader()
+    self.val_dataloader = self.datamodule.val_dataloader()
+
+    config.model.data_info.num_classes_gloss = len(self.datamodule.gloss_vocab)
+    config.model.data_info.num_classes_text = len(self.datamodule.text_vocab)
+    config.model.decoder.params.data_info = config.model.data_info
+    self.num_classes_gloss = len(self.datamodule.gloss_vocab)
+    self.num_classes_text = len(self.datamodule.text_vocab)
+    self.pad_index_gloss = self.datamodule.gloss_vocab[PAD_TOKEN]
+    self.pad_index_text = self.datamodule.text_vocab[PAD_TOKEN]
+    self.bos_index_text = self.datamodule.text_vocab[BOS_TOKEN]
+    self.eos_index_text = self.datamodule.text_vocab[EOS_TOKEN]
+
+    self.encoder_seq, self.decoder = get_slt_model(config.model)
+    self.num_encoders = len(self.encoder_seq)
+    self.gloss_output_layer = nn.Linear(self.encoder_seq[-1].out_size, self.num_classes_gloss)
+
+    self.externals = {}
+    self.initialize_losses(config.model.losses)
+    self.save_hyperparameters()
+
+  def initialize_losses(self, loss_config):
+    self.loss_config = loss_config
+    self.loss_fn = {} # stores class objects to calculate losses
+    self.loss_ip = {} # stores name of inputs to losses
+    self.loss_value = {} # stores loss values for a given iter
+    
+    self.loss_fn['CTC'] = nn.CTCLoss(zero_infinity=False) ## CTC loss will always be used
+    self.loss_fn['Xent'] = XentLoss(pad_index=self.pad_index_text, smoothing=0.0)
+
+
+  def forward(self, batch):
+    for i, enc in enumerate(self.encoder_seq):
+      if i==0:
+        x = enc(batch)
+      else:
+        x = enc(x, batch)
+
+      if i == len(self.encoder_seq) - 1:
+        # this is the last encoder, perform CSLR here
+        encoder_output = x
+        gloss_scores = self.gloss_output_layer(x)
+        gloss_probabilities = gloss_scores.log_softmax(2)
+        gloss_probabilities = gloss_probabilities.permute(1, 0, 2) # Both torch and tf CTC functions require (T, N, C)
+
+    word_scores, *_ = self.decoder(x, batch)
+    word_probabilities = word_scores.log_softmax(-1)
+
+    return gloss_probabilities, word_probabilities, encoder_output
+
+  def training_step(self, batch, batch_idx):
+    gloss_probabilities, word_probabilities, *_ = self.forward(batch)
+    self.loss_value['CTC'] = self.loss_fn['CTC'](
+      gloss_probabilities,
+      batch["gloss"],
+      batch["frames_len"],
+      batch["gloss_len"]
+    ) * getattr(self.config.model.loss_weights, 'CTC')
+
+    self.loss_value['Xent'] = self.loss_fn["Xent"](
+      word_probabilities, batch["text"]
+    ) * getattr(self.config.model.loss_weights, "Xent")
+
+    final_loss = sum(self.loss_value.values())
+    for loss, value in self.loss_value.items():
+      self.log(loss, value, on_step=True, on_epoch=True)
+    self.log("train_loss", final_loss, on_step=True, on_epoch=True)
+    return final_loss
+
+  def validation_step(self, batch, batch_idx):
+    gloss_probabilities, word_probabilities, encoder_output = self.forward(batch)
+    decoded_gloss_sequences = ctc_decode(
+      gloss_probabilities,
+      batch["frames_len"],
+      self.config.model.recognition_beam_size,
+
+    )
+
+    stacked_text_output, _ = decode(
+      decoder=self.decoder,
+      translation_beam_size=self.config.model.translation_beam_size,
+      translation_max_output_length=self.config.model.translation_max_output_length,
+      translation_beam_alpha=self.config.model.eval_translation_beam_alpha,
+      encoder_output=encoder_output,
+      frames_mask=batch['frames_mask'],
+      bos_index=self.bos_index_text,
+      eos_index=self.eos_index_text,
+      pad_index=self.pad_index_text
+    )
+
+    metrics_dict = get_wer(
+      cleanup_function=self.train_dataloader.dataset.clean_glosses,
+      decoded_gloss_sequences=decoded_gloss_sequences,
+      reference_gloss_sequences=batch["raw_gloss"],
+      gloss_vocab=self.datamodule.gloss_vocab
+    )
+
+    metrics_dict.update(
+      get_bleu(
+        decoded_text_sequences=stacked_text_output,
+        reference_text_sequences=batch["raw_text"],
+        text_vocab=self.datamodule.text_vocab
+      )
+    )
+    
+    for metric, value in metrics_dict.items():
+      if 'wer' in metric or 'bleu4' in metric:
+        self.log(metric, value, sync_dist=True, on_step=False, on_epoch=True, prog_bar=True)
+      else:
+        self.log(metric, value, sync_dist=True, on_step=False, on_epoch=True)
+
+    return {
+      "gloss_probabilities": gloss_probabilities,
+      "word_probabilities": word_probabilities
+    }
+
+  def configure_optimizers(self):
+    return torch.optim.Adam(self.parameters(), lr=self.config.model.optimizer_args.base_lr)
+
+  def fit(self):
+     self.trainer.fit(
+      self,
+      train_dataloaders=self.train_dataloader,
+      val_dataloaders=self.val_dataloader,
+    )

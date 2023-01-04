@@ -45,7 +45,7 @@ class BaseContinuousDataset(torch.utils.data.Dataset):
         multilingual=False,
         languages=None,
         language_set=None,
-
+        pad_type="regular",
         # Windowing
         seq_len=1, # No. of frames per window
         num_seq=1, # No. of windows
@@ -64,6 +64,7 @@ class BaseContinuousDataset(torch.utils.data.Dataset):
         self.num_seq = num_seq
         self.languages=languages
         self.language_set=language_set
+        self.pad_type = pad_type
 
         self.gloss_vocab = None
         self.text_vocab = None
@@ -159,8 +160,6 @@ class BaseContinuousDataset(torch.utils.data.Dataset):
             self.transforms = transforms
 
         self.transforms_gloss = torchtext.transforms.Sequential(
-            torchtext.transforms.AddToken(BOS_TOKEN),
-            torchtext.transforms.AddToken(EOS_TOKEN, begin=False),
             torchtext.transforms.VocabTransform(self.gloss_vocab),
         )
 
@@ -269,6 +268,12 @@ class BaseContinuousDataset(torch.utils.data.Dataset):
         """
         raise NotImplementedError
 
+    def clean_glosses(self):
+        """
+        Implement dataset-specific gloss cleanup function
+        """
+        raise NotImplementedError
+
     def build_vocab_from_iterators(self, glosses, texts):
         """
         Builds a torchtext.vocab.Vocab object for glosses and text, based on the tokens
@@ -278,7 +283,7 @@ class BaseContinuousDataset(torch.utils.data.Dataset):
         Sets the self.gloss_vocab and self.text_vocab attributes.
         """
         self.gloss_vocab = get_vocabulary_from_iter(iter(glosses))
-        self.text_vocab  = get_vocabulary_from_iter(iter(texts))
+        self.text_vocab  = get_vocabulary_from_iter(iter(texts), text=True)
 
     def read_original_dataset(self):
         """
@@ -291,7 +296,7 @@ class BaseContinuousDataset(torch.utils.data.Dataset):
         """
         Lists the video files from given directory.
         - If pose modality, generate `.pkl` files for all videos in folder.
-          - If no videos present, check if some `.pkl` files already exist
+          - If no videos present, che/data/models/OpenHands/openhands/apisck if some `.pkl` files already exist
         """
         files = list_all_videos(dir)
 
@@ -383,30 +388,40 @@ class BaseContinuousDataset(torch.utils.data.Dataset):
         return frames, frames_len
 
     #@staticmethod
-    def collate_fn(self, batch_list, pad_type='temp_conv'):
+    def collate_fn(self, batch_list):
         if "num_windows" in batch_list[0]:
             # Padding not required for windowed models
             frames=[x["frames"] for x in batch_list]
         else:
             batch_list = [item for item in sorted(batch_list, key=lambda x: x["frames"].shape[1], reverse=True)]
 
-            if pad_type == 'regular':
+            if self.pad_type == 'regular':
                 frames, frames_len = self.pad_regular(batch_list)
-            elif pad_type == 'temp_conv':
+            elif self.pad_type == 'temp_conv':
                 frames, frames_len = self.pad_for_temp_conv(batch_list, ['K5','P2','K5','P2'])
 
         frames = frames.transpose(1,2) ## we want (BS, MaxSeqLen, C, H, W)
-        # num_frames = torch.tensor([x["frames"].shape[1] for x in batch_list], dtype=int)
+        B, T, *_ = frames.size()
+        frames_mask = (frames.reshape(B, T, -1).sum(dim=-1) != 0).unsqueeze(1)
+        gloss=torchtext.functional.to_tensor([x["gloss"] for x in batch_list], padding_value=self.gloss_vocab[PAD_TOKEN]) #(B, T)
+
+        text=torchtext.functional.to_tensor([x["text"][1:] for x in batch_list], padding_value=self.text_vocab[PAD_TOKEN])
+        text_input=torchtext.functional.to_tensor([x["text"][:-1] for x in batch_list], padding_value=self.text_vocab[PAD_TOKEN])
 
         return dict(
             frames=frames,
             frames_len=frames_len,
+            frames_mask=frames_mask,
 
-            gloss=torchtext.functional.to_tensor([x["gloss"] for x in batch_list], padding_value=self.gloss_vocab[PAD_TOKEN]),
-            gloss_len = torch.tensor([len(x['gloss']) for x in batch_list],dtype=int),
+            gloss=gloss,
+            gloss_len=torch.tensor([len(x['gloss']) for x in batch_list],dtype=int),
+            gloss_mask=(gloss!=self.gloss_vocab[PAD_TOKEN]).unsqueeze(1),
+            raw_gloss=[x["gloss"] for x in batch_list], 
 
-            text=torchtext.functional.to_tensor([x["text"] for x in batch_list], padding_value=self.text_vocab[PAD_TOKEN]),
-            text_len = torch.tensor([len(x['text']) for x in batch_list],dtype=int),
+            text=text,
+            text_input=text_input,
+            text_mask=(text!=self.text_vocab[PAD_TOKEN]).unsqueeze(1),
+            raw_text=[x["text"][1:-1] for x in batch_list], # Remove the special tokens for computing metrics
 
             files=[x["file"] for x in batch_list],
             dataset_names=[x["dataset_name"] for x in batch_list]

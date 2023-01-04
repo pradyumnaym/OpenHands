@@ -1,6 +1,10 @@
 import os
+import re
 import pandas as pd
 import torchtext
+
+from itertools import groupby
+
 from .base import BaseContinuousDataset
 from ..data_readers import load_frames_from_folder
 
@@ -49,4 +53,39 @@ class Phoenix14TDataset(BaseContinuousDataset):
     video_dir, gloss_seq, text_seq = self.data[index]
     imgs = load_frames_from_folder(os.path.join(self.root_dir, video_dir), pattern='*.png')
     return imgs, gloss_seq, text_seq, video_dir
+
+  def clean_glosses(self, prediction):
+    prediction = prediction.strip()
+    prediction = re.sub(r"__LEFTHAND__", "", prediction)
+    prediction = re.sub(r"__EPENTHESIS__", "", prediction)
+    prediction = re.sub(r"__EMOTION__", "", prediction)
+    prediction = re.sub(r"\b__[^_ ]*__\b", "", prediction)
+    prediction = re.sub(r"\bloc-([^ ]*)\b", r"\1", prediction)
+    prediction = re.sub(r"\bcl-([^ ]*)\b", r"\1", prediction)
+    prediction = re.sub(r"\b([^ ]*)-PLUSPLUS\b", r"\1", prediction)
+    prediction = re.sub(r"\b([A-Z][A-Z]*)RAUM\b", r"\1", prediction)
+    prediction = re.sub(r"WIE AUSSEHEN", "WIE-AUSSEHEN", prediction)
+    prediction = re.sub(r"^([A-Z]) ([A-Z][+ ])", r"\1+\2", prediction)
+    prediction = re.sub(r"[ +]([A-Z]) ([A-Z]) ", r" \1+\2 ", prediction)
+    prediction = re.sub(r"([ +][A-Z]) ([A-Z][ +])", r"\1+\2", prediction)
+    prediction = re.sub(r"([ +][A-Z]) ([A-Z][ +])", r"\1+\2", prediction)
+    prediction = re.sub(r"([ +][A-Z]) ([A-Z][ +])", r"\1+\2", prediction)
+    prediction = re.sub(r"([ +]SCH) ([A-Z][ +])", r"\1+\2", prediction)
+    prediction = re.sub(r"([ +]NN) ([A-Z][ +])", r"\1+\2", prediction)
+    prediction = re.sub(r"([ +][A-Z]) (NN[ +])", r"\1+\2", prediction)
+    prediction = re.sub(r"([ +][A-Z]) ([A-Z])$", r"\1+\2", prediction)
+    prediction = re.sub(r" +", " ", prediction)
+    prediction = re.sub(r"(?<![\w-])(\b[A-Z]+(?![\w-])) \1(?![\w-])", r"\1", prediction)
+    prediction = re.sub(r"(?<![\w-])(\b[A-Z]+(?![\w-])) \1(?![\w-])", r"\1", prediction)
+    prediction = re.sub(r"(?<![\w-])(\b[A-Z]+(?![\w-])) \1(?![\w-])", r"\1", prediction)
+    prediction = re.sub(r"(?<![\w-])(\b[A-Z]+(?![\w-])) \1(?![\w-])", r"\1", prediction)
+    prediction = re.sub(r" +", " ", prediction)
+
+    # Remove white spaces and repetitions
+    prediction = " ".join(
+        " ".join(i[0] for i in groupby(prediction.split(" "))).split()
+    )
+    prediction = prediction.strip()
+
+    return prediction
 

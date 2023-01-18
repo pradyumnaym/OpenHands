@@ -1,6 +1,6 @@
 ## Test Code to check whether Phoenix Dataset Classes are working
 import torch
-from openhands.datasets.continuous import Phoenix14TDataset
+from openhands.datasets.continuous import Phoenix14TDataset, Phoenix14TFeaturesDataset
 
 # dataset = Phoenix14Dataset(
 #           train_file = '/data/OpenHands/openhands/datasets/assets/phoenix14_metadata/train.corpus.csv',
@@ -11,12 +11,21 @@ from openhands.datasets.continuous import Phoenix14TDataset
 #           transforms = None
 # )
 
-dataset = Phoenix14TDataset(
-          train_file = '/data/OpenHands/openhands/datasets/assets/phoenix14-t_metadata/PHOENIX-2014-T.train.corpus.csv',
-          split_file = '/data/OpenHands/openhands/datasets/assets/phoenix14-t_metadata/PHOENIX-2014-T.dev.corpus.csv',
-          root_dir = '/data/cslr_datasets/PHOENIX-2014/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/',
-          modality = 'rgb',
-          splits = 'val',
+# dataset = Phoenix14TDataset(
+#           train_file = '/data/OpenHands/openhands/datasets/assets/phoenix14-t_metadata/PHOENIX-2014-T.train.corpus.csv',
+#           split_file = '/data/OpenHands/openhands/datasets/assets/phoenix14-t_metadata/PHOENIX-2014-T.dev.corpus.csv',
+#           root_dir = '/data/cslr_datasets/PHOENIX-2014/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/',
+#           modality = 'rgb',
+#           splits = 'val',
+#           transforms = None
+# )
+
+dataset = Phoenix14TFeaturesDataset(
+          train_file = "/home/t-pym/slt/phoenix14t.pami0.train",
+          split_file = "/home/t-pym/slt/phoenix14t.pami0.train",
+          root_dir = '',
+          modality = 'feature',
+          splits = 'train',
           transforms = None
 )
 

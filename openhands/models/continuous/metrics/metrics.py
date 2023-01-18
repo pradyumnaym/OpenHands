@@ -6,6 +6,7 @@ import numpy as np
 
 from .external_metrics import sacrebleu
 from .external_metrics import mscoco_rouge
+from ....datasets.continuous.vocabulary import EOS_TOKEN
 
 WER_COST_DEL = 3
 WER_COST_INS = 3
@@ -246,13 +247,30 @@ def get_wer(
 
     return wer_list(hypotheses=gls_hyp, references=gls_ref)
 
+def array_to_sentence(text_vocab, array, cut_at_eos=True):
+    sentence = []
+    for i in array:
+        s = text_vocab.lookup_token(i)
+        if cut_at_eos and s == EOS_TOKEN:
+            break
+        sentence.append(s)
+    return sentence
+
+def arrays_to_sentences(text_vocab, arrays, cut_at_eos=True):
+    sentences = []
+    for array in arrays:
+        sentences.append(array_to_sentence(text_vocab, array, cut_at_eos))
+    return sentences
+
 def get_bleu(
     decoded_text_sequences,
     reference_text_sequences,
     text_vocab
 ):
+    decoded_text_sequences = arrays_to_sentences(text_vocab, decoded_text_sequences)
+
+    txt_hyp = [" ".join(t) for t in decoded_text_sequences]
     txt_ref = [" ".join(text_vocab.lookup_tokens(t)) for t in reference_text_sequences]
-    txt_hyp = [" ".join(text_vocab.lookup_tokens(t)) for t in decoded_text_sequences]
 
     metrics_dict = bleu(references=txt_ref, hypotheses=txt_hyp)
     metrics_dict['chrf'] = chrf(references=txt_ref, hypotheses=txt_hyp)

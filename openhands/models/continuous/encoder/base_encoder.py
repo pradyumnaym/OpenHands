@@ -15,9 +15,8 @@ class ResNet(EncoderModule):
     resnet_model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
     self.conv = torch.nn.Sequential(*(list(resnet_model.children())[:-1])) #remove the last FC layer
 
-  def forward(self, batch):
+  def forward(self, x, batch):
 
-    x = batch['frames']
     B, T, C, H, W = x.size()
     x = x.reshape(B * T, C, H, W)
     x = self.conv(x)

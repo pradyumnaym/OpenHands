@@ -23,11 +23,13 @@ class TCHW2CTHW(torch.nn.Module):
     def forward(self, x):
         return x.permute(1, 0, 2, 3)
 
-
 class THWC2CTHW(torch.nn.Module):
     def forward(self, x):
         return x.permute(3, 0, 1, 2)
 
+class TC2CT(torch.nn.Module):
+    def forward(self, x):
+        return x.permute(1, 0)
 
 class NumpyToTensor(torch.nn.Module):
     def forward(self, x):

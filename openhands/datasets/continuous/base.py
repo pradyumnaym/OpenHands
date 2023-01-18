@@ -49,6 +49,7 @@ class BaseContinuousDataset(torch.utils.data.Dataset):
         # Windowing
         seq_len=1, # No. of frames per window
         num_seq=1, # No. of windows
+        in_channels=3
     ):
         super().__init__()
         f = open('multigpu.log', 'a')
@@ -106,6 +107,10 @@ class BaseContinuousDataset(torch.utils.data.Dataset):
 
             self.__getitem = self.__getitem_pose
 
+        elif modality == "feature":
+            self.in_channels = in_channels
+            self.__getitem = self.__getitem_video
+
         else:
             exit(f"ERROR: Modality `{modality}` not supported")
 
@@ -158,6 +163,14 @@ class BaseContinuousDataset(torch.utils.data.Dataset):
             if transforms == "default":
                 transforms = None
             self.transforms = transforms
+
+        elif "feature" in modality:
+            # To keep the index of temporal dimension consistent with other modalities
+            self.transforms = torchvision.transforms.Compose(
+                [
+                    TC2CT()
+                ]
+            )
 
         self.transforms_gloss = torchtext.transforms.Sequential(
             torchtext.transforms.VocabTransform(self.gloss_vocab),
@@ -343,7 +356,6 @@ class BaseContinuousDataset(torch.utils.data.Dataset):
         pose_data = pickle.load(open(path, "rb"))
         return pose_data
 
-    
     def pad_for_temp_conv(self, batch_list, kernel_sizes):
         ## lots of redundant calculation happening here
         left_pad = 0
@@ -379,10 +391,15 @@ class BaseContinuousDataset(torch.utils.data.Dataset):
               F.pad(x["frames"], (0, 0, 0, 0, 0, max_len - x["frames"].shape[1]))
               for i, x in enumerate(batch_list)
             ]
+        elif self.modality == "feature":
+            frames = [
+                F.pad(x["frames"], (0, max_len - x["frames"].shape[1]))
+                for i, x in enumerate(batch_list)
+            ]
         else:
             raise NotImplementedError("Modality not implemented!")
-        frames = torch.stack(frames, dim=0) # (B,C,T,H,W)
 
+        frames = torch.stack(frames, dim=0) # (B,C,T,H,W)
         frames_len = torch.tensor([x["frames"].shape[1] for x in batch_list], dtype=int)
 
         return frames, frames_len
@@ -394,7 +411,6 @@ class BaseContinuousDataset(torch.utils.data.Dataset):
             frames=[x["frames"] for x in batch_list]
         else:
             batch_list = [item for item in sorted(batch_list, key=lambda x: x["frames"].shape[1], reverse=True)]
-
             if self.pad_type == 'regular':
                 frames, frames_len = self.pad_regular(batch_list)
             elif self.pad_type == 'temp_conv':

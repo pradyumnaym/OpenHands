@@ -1,0 +1,126 @@
+model:
+  recognition_beam_size: 1
+  translation_beam_size: 1
+  translation_max_output_length: 30
+  eval_translation_beam_alpha: -1
+  translation_normalization_mode: batch
+  batch_multiplier: 1
+  eval_metric: bleu4
+  initializer: xavier
+  bias_initializer: zeros
+  init_gain: 1.0
+  embed_initializer: xavier
+  embed_init_gain: 1.0
+  tied_softmax: false
+  
+  data_info:
+    # will be dynamically filled by the model.
+    num_classes_gloss: -1
+    num_classes_text: -1
+    pad_index_gloss: -1
+    pad_index_text: -1
+
+  encoder_seq:
+    encoder1:
+      type: TransformerEncoder
+      params:
+        num_layers: 3
+        num_heads: 8
+        hidden_size: 512
+        ff_size: 2048
+        dropout: 0.1
+        emb_dropout: 0.1
+        embeddings:
+          embedding_dim: 512
+          scale: false
+          norm_type: batch
+          activation_type: softsign
+          num_heads: 8
+          input_size: 1024
+
+  decoder:
+    type: TransformerDecoder
+    params:
+      num_layers: 3
+      num_heads: 8
+      hidden_size: 512
+      ff_size: 2048
+      dropout: 0.1
+      emb_dropout: 0.1
+      embeddings:
+        embedding_dim: 512
+        scale: false
+        norm_type: batch
+        activation_type: softsign
+  
+  losses:
+
+  loss_weights:
+    CTC: 5.0
+    Xent: 1.0
+
+  optimizer:
+    name: Adam
+    params:
+      lr: 0.001
+      weight_decay: 0.001
+      eps: 1.0e-08
+      betas:
+      - 0.9
+      - 0.998
+
+  scheduler:
+    name: ReduceLROnPlateau
+    params:
+      threshold_mode: abs
+      factor: 0.7
+      patience: 4
+
+data:
+  modality: "feature"
+  train_pipeline:
+    dataset:
+      _target_: openhands.datasets.continuous.Phoenix14TFeaturesDataset
+      split_file: "/home/t-pym/slt/phoenix14t.pami0.train"
+      root_dir: ""
+      modality: "feature"
+      splits: "train"
+      train_file: "/home/t-pym/slt/phoenix14t.pami0.train"
+      in_channels: 1024
+
+    transforms:
+
+    dataloader:
+      _target_: torch.utils.data.DataLoader
+      batch_size: 32
+      shuffle: true
+      num_workers: 12 # default = 3
+      pin_memory: true
+      drop_last: false
+
+  valid_pipeline:
+    dataset:
+      _target_: openhands.datasets.continuous.Phoenix14TFeaturesDataset
+      split_file: "/home/t-pym/slt/phoenix14t.pami0.dev"
+      root_dir: ""
+      modality: "feature"
+      splits: "val"
+      train_file: "/home/t-pym/slt/phoenix14t.pami0.train"
+      in_channels: 1024
+
+    transforms:
+
+    dataloader:
+      _target_: torch.utils.data.DataLoader
+      batch_size: 32
+      shuffle: false
+      num_workers: 24 # default 1
+      pin_memory: true
+      drop_last: false
+
+trainer:
+  accelerator: 'gpu'
+  # devices: [0]
+  max_epochs: 100
+  # strategy: 'ddp_find_unused_parameters_false'
+

@@ -4,9 +4,11 @@ import numpy as np
 import tensorflow as tf
 import pytorch_lightning as pl
 
+from itertools import chain
 from openhands.datasets.continuous.vocabulary import PAD_TOKEN, BOS_TOKEN, EOS_TOKEN
 from .continuous.loss.slt import XentLoss
 from .continuous.decoder.decoder_utils import ctc_decode, decode
+from .continuous.initialization import initialize_model
 from .continuous.metrics.metrics import get_wer, get_bleu
 from ..core.data import DataModule
 from .csl_loader import get_slt_model
@@ -118,6 +120,8 @@ class SLTModel(pl.LightningModule):
 
     config.model.data_info.num_classes_gloss = len(self.datamodule.gloss_vocab)
     config.model.data_info.num_classes_text = len(self.datamodule.text_vocab)
+    config.model.data_info.pad_index_text = self.datamodule.text_vocab[PAD_TOKEN]
+    config.model.data_info.pad_index_gloss = self.datamodule.gloss_vocab[PAD_TOKEN]
     config.model.decoder.params.data_info = config.model.data_info
     self.num_classes_gloss = len(self.datamodule.gloss_vocab)
     self.num_classes_text = len(self.datamodule.text_vocab)
@@ -130,8 +134,15 @@ class SLTModel(pl.LightningModule):
     self.num_encoders = len(self.encoder_seq)
     self.gloss_output_layer = nn.Linear(self.encoder_seq[-1].out_size, self.num_classes_gloss)
 
+    if self.config.model.eval_metric in ["bleu4", "chrf", "rouge"]:
+        self.minimize_metric = False
+    else:  # eval metric that has to get minimized (not yet implemented)
+      raise NotImplementedError("Metric not implemented!")
+      self.minimize_metric = True
+
     self.externals = {}
     self.initialize_losses(config.model.losses)
+    # initialize_model(self, self.config.model, self.pad_index_text)
     self.save_hyperparameters()
 
   def initialize_losses(self, loss_config):
@@ -140,16 +151,14 @@ class SLTModel(pl.LightningModule):
     self.loss_ip = {} # stores name of inputs to losses
     self.loss_value = {} # stores loss values for a given iter
     
-    self.loss_fn['CTC'] = nn.CTCLoss(zero_infinity=False) ## CTC loss will always be used
+    self.loss_fn['CTC'] = nn.CTCLoss(zero_infinity=True) ## CTC loss will always be used
     self.loss_fn['Xent'] = XentLoss(pad_index=self.pad_index_text, smoothing=0.0)
 
 
   def forward(self, batch):
+    x = batch["frames"]
     for i, enc in enumerate(self.encoder_seq):
-      if i==0:
-        x = enc(batch)
-      else:
-        x = enc(x, batch)
+      x = enc(x, batch)
 
       if i == len(self.encoder_seq) - 1:
         # this is the last encoder, perform CSLR here
@@ -165,22 +174,43 @@ class SLTModel(pl.LightningModule):
 
   def training_step(self, batch, batch_idx):
     gloss_probabilities, word_probabilities, *_ = self.forward(batch)
-    self.loss_value['CTC'] = self.loss_fn['CTC'](
+    
+    self.compute_external_losses(gloss_probabilities, word_probabilities, batch)
+
+    final_loss = sum(self.loss_value.values())
+    for loss, value in self.loss_value.items():
+      self.log(loss, value, on_step=True, on_epoch=True)
+    self.log("train_loss", final_loss, on_step=True, on_epoch=True)
+
+    return final_loss
+
+  def compute_external_losses(self, gloss_probabilities, word_probabilities, batch):
+
+    translation_loss = self.loss_fn["Xent"](
+      word_probabilities, batch["text"]
+    ) * getattr(self.config.model.loss_weights, "Xent")
+
+    recognition_loss = self.loss_fn['CTC'](
       gloss_probabilities,
       batch["gloss"],
       batch["frames_len"],
       batch["gloss_len"]
     ) * getattr(self.config.model.loss_weights, 'CTC')
 
-    self.loss_value['Xent'] = self.loss_fn["Xent"](
-      word_probabilities, batch["text"]
-    ) * getattr(self.config.model.loss_weights, "Xent")
+    if self.config.model.translation_normalization_mode == "batch":
+        txt_normalization_factor = batch["frames"].shape[0]
+    elif self.config.model.translation_normalization_mode == "tokens":
+        txt_normalization_factor = batch.num_txt_tokens
+    else:
+        raise NotImplementedError("Only normalize by 'batch' or 'tokens'")
 
-    final_loss = sum(self.loss_value.values())
-    for loss, value in self.loss_value.items():
-      self.log(loss, value, on_step=True, on_epoch=True)
-    self.log("train_loss", final_loss, on_step=True, on_epoch=True)
-    return final_loss
+    normalized_translation_loss = translation_loss / (
+        txt_normalization_factor * self.config.model.batch_multiplier
+    )
+    normalized_recognition_loss = recognition_loss / self.config.model.batch_multiplier
+
+    self.loss_value['Xent'] = normalized_translation_loss
+    self.loss_value['CTC'] = normalized_recognition_loss
 
   def validation_step(self, batch, batch_idx):
     gloss_probabilities, word_probabilities, encoder_output = self.forward(batch)
@@ -188,7 +218,6 @@ class SLTModel(pl.LightningModule):
       gloss_probabilities,
       batch["frames_len"],
       self.config.model.recognition_beam_size,
-
     )
 
     stacked_text_output, _ = decode(
@@ -210,13 +239,13 @@ class SLTModel(pl.LightningModule):
       gloss_vocab=self.datamodule.gloss_vocab
     )
 
-    metrics_dict.update(
-      get_bleu(
-        decoded_text_sequences=stacked_text_output,
-        reference_text_sequences=batch["raw_text"],
-        text_vocab=self.datamodule.text_vocab
-      )
-    )
+    # metrics_dict.update(
+    #   get_bleu(
+    #     decoded_text_sequences=stacked_text_output,
+    #     reference_text_sequences=batch["raw_text"],
+    #     text_vocab=self.datamodule.text_vocab
+    #   )
+    # )
     
     for metric, value in metrics_dict.items():
       if 'wer' in metric or 'bleu4' in metric:
@@ -226,11 +255,68 @@ class SLTModel(pl.LightningModule):
 
     return {
       "gloss_probabilities": gloss_probabilities,
-      "word_probabilities": word_probabilities
+      "word_probabilities": word_probabilities,
+      "decoded_text_sequences": stacked_text_output.tolist(),
+      "reference_text_sequences": batch["raw_text"] 
     }
 
+  # def validation_step_end(self, batch_parts):
+  #   """
+  #   Aggregate all the mini-batches within a torch DDP batch.
+  #   """
+  #   return {
+  #     "decoded_text_sequences": list(chain.from_iterable(batch_parts["decoded_text_sequences"])),
+  #     "reference_text_sequences": list(chain.from_iterable(batch_parts["reference_text_sequences"]))
+  #   }
+
+  def validation_epoch_end(self, outputs) -> None:
+    """
+    Aggregate all the batches of the val set to compute corpus-level metrics.
+    Reference: https://pytorch-lightning.readthedocs.io/en/stable/common/lightning_module.html#validating-with-dataparallel
+    """
+
+    decoded_text_sequences = list(chain.from_iterable([x["decoded_text_sequences"] for x in outputs]))
+    reference_text_sequences = list(chain.from_iterable([x["reference_text_sequences"] for x in outputs]))
+    corpus_metrics = get_bleu (
+      decoded_text_sequences=decoded_text_sequences,
+      reference_text_sequences=reference_text_sequences,
+      text_vocab=self.datamodule.text_vocab
+    )
+    
+    for metric, value in corpus_metrics.items():
+      if 'bleu4' in metric:
+        self.log(metric, value, sync_dist=True, on_step=False, on_epoch=True, prog_bar=True)
+      else:
+        self.log(metric, value, sync_dist=True, on_step=False, on_epoch=True)
+
   def configure_optimizers(self):
-    return torch.optim.Adam(self.parameters(), lr=self.config.model.optimizer_args.base_lr)
+    optimizer_conf = self.config.model.optimizer
+    optimizer = getattr(torch.optim, optimizer_conf.name)(
+      params=self.parameters(), **optimizer_conf.params
+    )
+
+    with open("model_params.txt", "w") as f:
+      params = list(self.named_parameters())
+      params.sort(key = lambda x: x[0]) #sort by name
+      for name, param in params:
+        print(f"{name}: {param.requires_grad}", file=f)
+
+    if "scheduler" not in self.config.model:
+      return [optimizer]
+
+    scheduler_conf = self.config.model.scheduler
+    scheduler = getattr(torch.optim.lr_scheduler, scheduler_conf.name)(
+      optimizer=optimizer,
+      mode="min" if self.minimize_metric else "max",
+      **scheduler_conf.params
+    )
+
+    return {
+      "optimizer": optimizer,
+      "lr_scheduler": {
+        "scheduler": scheduler, "monitor": self.config.model.eval_metric
+      }
+    }
 
   def fit(self):
      self.trainer.fit(

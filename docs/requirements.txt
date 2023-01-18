@@ -6,12 +6,9 @@ omegaconf>=2.1.0
 pytorch-lightning>=1.5.0
 pytorchvideo>=0.1.1
 hydra_core>=1.1.0
-torch
 mediapipe>=0.8.7.3
 natsort
 h5py
-torchvision
-torchtext
 opencv_python_headless
 torchmetrics>=0.5.1
 timm
@@ -22,9 +19,14 @@ scikit_learn>=1.0
 beautifulsoup4
 lxml
 spacy
-
+tensorflow-cpu
 
 sphinx
 myst-parser
 sphinx_rtd_theme
 sphinx_copybutton
+
+torchtext==0.13.1
+--extra-index-url https://download.pytorch.org/whl/cu113
+torch==1.12.1+cu113
+torchvision==0.13.1+cu113

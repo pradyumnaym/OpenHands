@@ -67,11 +67,11 @@ data:
   train_pipeline:
     dataset:
       _target_: openhands.datasets.continuous.Phoenix14TDataset
-      split_file: "/data/OpenHands/openhands/datasets/assets/phoenix14-t_metadata/PHOENIX-2014-T.train.corpus.csv"
-      root_dir: "/data/cslr_datasets/PHOENIX-2014/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/"
+      split_file: "openhands/datasets/assets/phoenix14-t_metadata/PHOENIX-2014-T.train.corpus.csv"
+      root_dir: "/home/t-pym/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/"
       modality: "rgb"
       splits: "train"
-      train_file: "/data/OpenHands/openhands/datasets/assets/phoenix14-t_metadata/PHOENIX-2014-T.train.corpus.csv"
+      train_file: "openhands/datasets/assets/phoenix14-t_metadata/PHOENIX-2014-T.train.corpus.csv"
 
     transforms:
 
@@ -86,11 +86,11 @@ data:
   valid_pipeline:
     dataset:
       _target_: openhands.datasets.continuous.Phoenix14TDataset
-      split_file: "/data/OpenHands/openhands/datasets/assets/phoenix14-t_metadata/PHOENIX-2014-T.dev.corpus.csv"
-      root_dir: "/data/cslr_datasets/PHOENIX-2014/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/"
+      split_file: "openhands/datasets/assets/phoenix14-t_metadata/PHOENIX-2014-T.dev.corpus.csv"
+      root_dir: "/home/t-pym/PHOENIX-2014-T-release-v3/PHOENIX-2014-T/"
       modality: "rgb"
       splits: "val"
-      train_file: "/data/OpenHands/openhands/datasets/assets/phoenix14-t_metadata/PHOENIX-2014-T.train.corpus.csv"
+      train_file: "openhands/datasets/assets/phoenix14-t_metadata/PHOENIX-2014-T.train.corpus.csv"
 
     transforms:
 
@@ -104,7 +104,7 @@ data:
 
 trainer:
   accelerator: 'gpu'
-  devices: [0, 3, 1, 2]
+  # devices: [0]
   max_epochs: 80
-  strategy: 'ddp_find_unused_parameters_false'
+  # strategy: 'ddp_find_unused_parameters_false'
 

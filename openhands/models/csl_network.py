@@ -10,7 +10,7 @@ from .continuous.loss.slt import XentLoss
 from .continuous.decoder.decoder_utils import ctc_decode, decode
 from .continuous.initialization import initialize_model
 from .continuous.metrics.metrics import get_wer, get_bleu
-from ..core.data import DataModule
+from ..core.data import DataModuleContinuous
 from .csl_loader import get_slt_model
 
 
@@ -113,7 +113,7 @@ class SLTModel(pl.LightningModule):
 
     self.config = config
     self.trainer = trainer
-    self.datamodule = DataModule(config.data)
+    self.datamodule = DataModuleContinuous(config.data)
     self.datamodule.setup(stage='fit')
     self.train_dataloader = self.datamodule.train_dataloader()
     self.val_dataloader = self.datamodule.val_dataloader()

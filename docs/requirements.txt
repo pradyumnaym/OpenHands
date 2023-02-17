@@ -10,7 +10,7 @@ mediapipe>=0.8.7.3
 natsort
 h5py
 opencv_python_headless
-torchmetrics>=0.5.1
+torchmetrics==0.5.1
 timm
 transformers>=4.9.1
 pandas

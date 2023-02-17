@@ -5,8 +5,8 @@ data:
     train_pipeline:
         dataset:
             _target_: openhands.datasets.isolated.WLASLDataset
-            split_file: /home/gokulnc/data-disk/datasets/American/WLASL2000/splits/asl2000.json
-            root_dir: /home/gokulnc/data-disk/datasets/American/WLASL2000/poses_pickle
+            split_file: openhands/datasets/assets/wlasl_metadata/splits/asl100_random.json
+            root_dir: /data/islr_datasets/wlasl_poses_pickle
             splits: "train"
             modality: "pose"
 
@@ -37,8 +37,8 @@ data:
     valid_pipeline:
         dataset:
             _target_: openhands.datasets.isolated.WLASLDataset
-            split_file: /home/gokulnc/data-disk/datasets/American/WLASL2000/splits/asl2000.json
-            root_dir: /home/gokulnc/data-disk/datasets/American/WLASL2000/poses_pickle
+            split_file: openhands/datasets/assets/wlasl_metadata/splits/asl100_random.json
+            root_dir: /data/islr_datasets/wlasl_poses_pickle
             splits: "test"
             modality: "pose"
 
@@ -113,23 +113,25 @@ optim:
             T_max: 10
 
 trainer:
-    gpus: 1
+    accelerator: 'gpu'
+    devices: [2]
     max_epochs: 1000
+    deterministic: true
     # resume_from_checkpoint: "/home/gokulnc/openhands/outputs/2021-06-30/15-36-05/Decoupled GCN-INCLUDE/0/checkpoints/epoch=93-step=4417.ckpt"
 
 exp_manager:
     create_tensorboard_logger: true
-    create_wandb_logger: false
+    create_wandb_logger: true
     wandb_logger_kwargs:
-        name: null
-        project: null
+        name: sl_gcn_random_split
+        project: wlasl100
 
     create_checkpoint_callback: true
     checkpoint_callback_params:
         monitor: "val_acc"
         mode: "max"
         save_top_k: 3
-        dirpath: "experiments/wlasl/sl_gcn/"
+        dirpath: "experiments/wlasl/sl_gcn_random_split/"
 
     early_stopping_callback: true
     early_stopping_params:

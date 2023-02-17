@@ -62,9 +62,9 @@ def configure_loggers(
 
         logger_list.append(wandb_logger)
 
-    logger_list = LoggerCollection(logger_list)
+    logger_list = logger_list
 
-    trainer.logger_connector.configure_logger(logger_list)
+    trainer.loggers.extend(logger_list)
 
 
 def configure_checkpointing(trainer, cfg):

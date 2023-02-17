@@ -1,4 +1,4 @@
-from .data import DataModule
+from .data import DataModule, DataModuleContinuous
 from .exp_utils import (
     experiment_manager,
     configure_loggers,

@@ -29,6 +29,9 @@ class Phoenix14TFeaturesDataset(BaseContinuousDataset):
     glosses, texts = list(), list()
     data = self.load_dataset_file(self.train_file)
     for i in data:
+      #signer independent split
+      if i['signer'] == 'Signer05':
+        continue
       glosses.append(self.gloss_tokenizer(i["gloss"]))
       texts.append(self.text_tokenizer(i["text"]))
     
@@ -37,6 +40,10 @@ class Phoenix14TFeaturesDataset(BaseContinuousDataset):
   def read_original_dataset(self):
     data = self.load_dataset_file(self.split_file)
     for i in data:
+      if self.splits == 'train' and i['signer'] == 'Signer05':
+        continue
+      elif self.splits != 'train' and i['signer'] != 'Signer05':
+        continue
       self.data.append((
         i["sign"], 
         self.gloss_tokenizer(i["gloss"]), 

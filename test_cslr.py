@@ -1,6 +1,6 @@
 #import torch
 import omegaconf
-from openhands.core import DataModule
+from openhands.core import DataModuleContinuous
 from openhands.models.csl_loader import get_cslr_model
 import pytorch_lightning as pl
 
@@ -13,7 +13,7 @@ import pytorch_lightning as pl
 if __name__ == '__main__':
   config = omegaconf.OmegaConf.load("examples/configs/phoenix14/tlp.yaml")
 
-  datamodule = DataModule(config.data)
+  datamodule = DataModuleContinuous(config.data)
   
   model = get_cslr_model(config.model)
 
